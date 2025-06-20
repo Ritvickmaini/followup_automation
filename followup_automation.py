@@ -221,6 +221,7 @@ def process_followups():
     try:
         data = sheet.get_all_records()
         today = datetime.today().strftime('%Y-%m-%d')
+
         for idx, row in enumerate(data, start=2):
             try:
                 print(f"\nRow {idx}: Checking email: {row.get('Email', 'Unknown')}")
@@ -237,22 +238,17 @@ def process_followups():
                 last_date = row.get("Last Follow-Up Date", "")
                 reply_status = row.get("Reply Status", "").strip()
 
-                color = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
-                if color:
-                    r, g, b = color
-                    if (r == 255 and g == 255 and b == 0) or (r == 255 and g == 0 and b == 0) or (g - max(r, b) >= 50):
-                        print("Row already marked with yellow/red/green. Skipping.")
-                        continue
-
                 if reply_status in ["Replied", "No Reply After 4"]:
                     print(f"{email_addr} already marked as {reply_status}. Skipping.")
                     continue
 
                 if last_date:
-                    last_dt = datetime.strptime(last_date, "%Y-%m-%d")
-                    if last_dt.date() == datetime.today().date():
-                        print(f"{email_addr} was recently contacted. Skipping.")
-                        continue
+                   last_dt = datetime.strptime(last_date, "%Y-%m-%d")
+                   hours_since_last = (datetime.now() - last_dt).total_seconds() / 3600
+                   if hours_since_last < 24:
+                      print(f"{email_addr} was contacted {hours_since_last:.1f} hours ago. Skipping.")
+                      continue
+
 
                 if count >= 4:
                     print(f"Sending final email to {email_addr}")
@@ -287,6 +283,11 @@ def process_followups():
                 sheet.update_cell(idx, 5, str(count + 1))
                 sheet.update_cell(idx, 6, today)
                 sheet.update_cell(idx, 7, "Pending")
+
+                # Delay every 3 rows
+                if (idx - 1) % 3 == 0:
+                    print("Waiting for 3 seconds...")
+                    time.sleep(3)
 
             except Exception as e:
                 print(f"❌ Error processing row {idx} for {row.get('Email', 'Unknown')}: {e}")
