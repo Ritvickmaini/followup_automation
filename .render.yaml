@@ -1,0 +1,11 @@
+services:
+  - type: worker
+    name: sales-followup-automation
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python followup_automation.py
+    envVars:
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
