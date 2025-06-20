@@ -250,7 +250,7 @@ def process_followups():
 
                 if last_date:
                     last_dt = datetime.strptime(last_date, "%Y-%m-%d")
-                    if datetime.today() - last_dt < timedelta(hours=24):
+                    if last_dt.date() == datetime.today().date():
                         print(f"{email_addr} was recently contacted. Skipping.")
                         continue
 
