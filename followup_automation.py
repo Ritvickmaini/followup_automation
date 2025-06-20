@@ -59,10 +59,8 @@ EMAIL_TEMPLATE = """
 """
 
 # === Authenticate Google Sheets using env var ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-service_account_info = json.loads(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"))
-creds = Credentials.from_service_account_info(service_account_info, scopes=SCOPES)
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds = Credentials.from_service_account_file('/etc/secrets/google-credentials.json', scopes=SCOPES)
 sheets_api = build("sheets", "v4", credentials=creds)
 gc = gspread.authorize(creds)
 sheet = gc.open("Expo Sales Management").worksheet("Exhibitors Opportunity")
