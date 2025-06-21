@@ -32,16 +32,13 @@ EMAIL_TEMPLATE = """
     <div style="text-align: center; margin-bottom: 20px;">
       <img src="https://iili.io/FogC9l2.jpg" alt="B2B Growth Expo" style="max-width: 400px; height: auto;" />
     </div>
-
     <p>Hi {%name%},</p>
     <p>{%body%}</p>
-
     <p>
       If you would like to schedule a meeting with me at your convenient time,<br>
       please use the link below:<br>
       <a href="https://tidycal.com/nagendra/b2b-discovery-call" target="_blank">https://tidycal.com/nagendra/b2b-discovery-call</a>
     </p>
-
     <p style="margin-top: 30px;">
       Thanks & Regards,<br>
       <strong>Nagendra Mishra</strong><br>
@@ -50,7 +47,6 @@ EMAIL_TEMPLATE = """
       Email: <a href="mailto:nagendra@b2bgrowthhub.com">nagendra@b2bgrowthhub.com</a><br>
       <a href="https://www.b2bgrowthhub.com" target="_blank">www.b2bgrowthhub.com</a>
     </p>
-
     <p style="font-size: 13px; color: #888;">
       If you don’t want to hear from me again, please let me know.
     </p>
@@ -67,15 +63,9 @@ sheet = gc.open("Sales-sheet-automation-test").worksheet("Sales")
 
 # === Follow-up Templates ===
 FOLLOWUP_EMAILS = [
-    "This is Nagendra from B2B Growth Expo. Thank you for expressing interest in exhibiting at our upcoming {%show%}. "
-    "I'd love to schedule a quick call to understand your requirements better. Could you let me know a suitable time for a short conversation?",
-
-    "Since I haven’t heard back, I’m sharing our Exhibitor Pitch Deck to help you make a more informed decision.<br>"
-    "Here is the link: <a href=\"{%pitch_deck_url%}\" target=\"_blank\">Pitch Deck</a><br>"
-    "Feel free to reach out if you have any questions.",
-
+    "This is Nagendra from B2B Growth Expo. Thank you for expressing interest in exhibiting at our upcoming {%show%}. I'd love to schedule a quick call to understand your requirements better. Could you let me know a suitable time for a short conversation?",
+    "Since I haven’t heard back, I’m sharing our Exhibitor Pitch Deck to help you make a more informed decision.<br>Here is the link: <a href=\"{%pitch_deck_url%}\" target=\"_blank\">Pitch Deck</a><br>Feel free to reach out if you have any questions.",
     "Just checking in—were you able to go through the Exhibitor Pitch Deck I shared earlier?",
-
     "I understand things can get busy. I'd appreciate it if you could take a moment to let me know your thoughts when you have a chance."
 ]
 
@@ -98,26 +88,19 @@ def send_email(to_email, subject, body, name=""):
     msg["Subject"] = subject
     msg["From"] = f"{SENDER_NAME} <{SMTP_EMAIL}>"
     msg["To"] = to_email
-
     html_body = EMAIL_TEMPLATE.replace("{%name%}", name).replace("{%body%}", body)
     msg.attach(MIMEText(html_body, "html"))
 
     try:
-        if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
-                server.login(SMTP_EMAIL, SMTP_PASSWORD)
-                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-        else:
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_EMAIL, SMTP_PASSWORD)
-                server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
         print(f"✅ Email sent to {to_email}")
     except Exception as e:
         print(f"❌ SMTP Error while sending to {to_email}: {e}")
 
     try:
-        print(f"Saving email to Sent folder for {to_email}")
         imap = imaplib.IMAP4_SSL(IMAP_SERVER)
         imap.login(SMTP_EMAIL, SMTP_PASSWORD)
         imap.append("INBOX.Sent", '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
@@ -206,23 +189,29 @@ def process_replies():
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
                 continue
+
             email_addr = row.get("Email", "").lower().strip()
             rgb = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
 
-# Skip red background (R>180, G<100, B<100)
-            if rgb and rgb[0] > 180 and rgb[1] < 100 and rgb[2] < 100:
-               print(f"Row {idx} has red background, skipping.")
-               continue
+            if rgb:
+                r, g, b = rgb
+                if r > 180 and g < 100 and b < 100:
+                    print(f"Row {idx} is red, skipping.")
+                    continue
+                if g > 180:
+                    print(f"Row {idx} is green, skipping.")
+                    continue
+                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:
+                    print(f"Row {idx} is yellow, skipping.")
+                    continue
 
-            # Skip green background (G>180)
-            if rgb and rgb[1] > 180:
-               print(f"Row {idx} has green background, skipping.")
-               continue
+            if not email_addr:
+                continue
 
-# Skip yellow background (R≈255, G≈255, B<50)
-           if rgb and abs(rgb[0] - 255) < 10 and abs(rgb[1] - 255) < 10 and rgb[2] < 50:
-              print(f"Row {idx} has yellow background, skipping.")
-              continue
+            if email_addr in replied_emails and row.get("Reply Status", "") != "Replied":
+                print(f"Marking row {idx} ({email_addr}) as Replied.")
+                sheet.update_cell(idx, 7, "Replied")
+                set_row_color(sheet, idx, "#FFFF00")  # Yellow
 
     except Exception as e:
         print("❌ Error in processing replies:", e)
@@ -235,9 +224,8 @@ def process_followups():
 
         for idx, row in enumerate(data, start=2):
             try:
-                print(f"\nRow {idx}: Checking email: {row.get('Email', 'Unknown')}")
+                print(f"\nRow {idx}: Checking {row.get('Email')}")
                 if not any(row.values()):
-                    print(f"Row {idx} is empty. Skipping.")
                     continue
 
                 email_addr = row.get("Email", "").lower().strip()
@@ -250,58 +238,45 @@ def process_followups():
                 reply_status = row.get("Reply Status", "").strip()
 
                 if reply_status in ["Replied", "No Reply After 4"]:
-                    print(f"{email_addr} already marked as {reply_status}. Skipping.")
                     continue
 
                 if last_date:
-                   last_dt = datetime.strptime(last_date, "%Y-%m-%d")
-                   hours_since_last = (datetime.now() - last_dt).total_seconds() / 3600
-                   if hours_since_last < 24:
-                      print(f"{email_addr} was contacted {hours_since_last:.1f} hours ago. Skipping.")
-                      continue
-
+                    last_dt = datetime.strptime(last_date, "%Y-%m-%d")
+                    if (datetime.now() - last_dt).total_seconds() < 86400:
+                        continue
 
                 if count >= 4:
-                    print(f"Sending final email to {email_addr}")
                     send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
                     sheet.update_cell(idx, 7, "No Reply After 4 Followups")
                     set_row_color(sheet, idx, "#FF0000")
                     continue
 
                 followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
+                subject = FOLLOWUP_SUBJECTS[count]
 
                 if count == 0:
-                    show_name = row.get("Show", "").strip()
-                    if not show_name:
-                        print("Missing show name. Skipping.")
+                    show = row.get("Show", "").strip()
+                    if not show:
                         continue
-                    followup_text = followup_text.replace("{%show%}", show_name)
-                    subject = FOLLOWUP_SUBJECTS[0].replace("{%show%}", show_name)
-
+                    followup_text = followup_text.replace("{%show%}", show)
+                    subject = subject.replace("{%show%}", show)
                 elif count == 1:
-                    pitch_deck_url = row.get("Pitch Deck URL", "").strip()
-                    if not pitch_deck_url:
-                        print("Missing pitch deck URL. Skipping.")
+                    url = row.get("Pitch Deck URL", "").strip()
+                    if not url:
                         continue
-                    followup_text = followup_text.replace("{%pitch_deck_url%}", pitch_deck_url)
-                    subject = FOLLOWUP_SUBJECTS[1]
+                    followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
-                else:
-                    subject = FOLLOWUP_SUBJECTS[count]
-
-                print(f"Sending follow-up #{count + 1} to {email_addr} with subject: {subject}")
                 send_email(email_addr, subject, followup_text, name=name)
                 sheet.update_cell(idx, 5, str(count + 1))
                 sheet.update_cell(idx, 6, today)
                 sheet.update_cell(idx, 7, "Pending")
 
-                # Delay every 3 rows
                 if (idx - 1) % 3 == 0:
-                    print("Waiting for 3 seconds...")
+                    print("Sleeping for 3 seconds...")
                     time.sleep(3)
 
             except Exception as e:
-                print(f"❌ Error processing row {idx} for {row.get('Email', 'Unknown')}: {e}")
+                print(f"❌ Error on row {idx}: {e}")
     except Exception as e:
         print("❌ Error in processing followups:", e)
 
@@ -318,10 +293,10 @@ if __name__ == "__main__":
             if time.time() >= next_followup_check:
                 print("\n--- Sending follow-up emails ---")
                 process_followups()
-                next_followup_check = time.time() + 900  # 15 minutes
+                next_followup_check = time.time() + 900  # Every 15 minutes
 
         except Exception:
-            print("❌ Unexpected fatal error occurred:")
+            print("❌ Fatal error:")
             traceback.print_exc()
 
         time.sleep(30)
