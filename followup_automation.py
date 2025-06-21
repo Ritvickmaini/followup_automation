@@ -298,6 +298,7 @@ def process_followups():
         color_updates = {}
       
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
+        sent_tracker = set()  # ✅ New: Track emails already sent in this cycle
       
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
@@ -314,7 +315,7 @@ def process_followups():
                     continue
 
             email_addr = row.get("Email", "").lower().strip()
-            if not email_addr:
+            if not email_addr or email_addr in sent_tracker:  # ✅ Skip if already sent in this run:
                 continue
 
             name = row.get("First_Name", "").strip()
@@ -334,6 +335,7 @@ def process_followups():
                 send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
                 updates.append({"range": f"{sheet.title}!G{idx}", "values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
+                sent_tracker.add(email_addr)  # ✅ Track even final emails
                 continue
 
             followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
@@ -352,6 +354,7 @@ def process_followups():
                 followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
             send_email(email_addr, subject, followup_text, name=name)
+            sent_tracker.add(email_addr)  # ✅ Add email to tracker
 
             updates.extend([
                 {"range": f"{sheet.title}!E{idx}", "values": [[str(count + 1)]]},
