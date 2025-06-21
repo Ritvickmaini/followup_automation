@@ -284,7 +284,7 @@ def process_replies():
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
         if color_updates:
-            batch_color_rows(sheet._properties['sheetId'], color_updates)
+            batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
 
     except Exception as e:
         print("❌ Error in processing replies:", e)
@@ -366,7 +366,7 @@ def process_followups():
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
         if color_updates:
-            batch_color_rows(sheet._properties['sheetId'], color_updates)
+            batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
 
     except Exception as e:
         print("❌ Error in processing followups:", e)
