@@ -301,19 +301,21 @@ def process_followups():
 if __name__ == "__main__":
     print("🚀 Sales follow-up automation started...")
     next_followup_check = time.time()
-
+    
     while True:
         try:
             print("\n--- Checking for replies ---")
-            process_replies()
+            process_replies()  # Every 15 minutes
 
-            if time.time() >= next_followup_check:
+            current_time = time.time()
+
+            if current_time >= next_followup_check:
                 print("\n--- Sending follow-up emails ---")
-                process_followups()
-                next_followup_check = time.time() + 900  # Every 15 minutes
+                process_followups()  # Every 60 minutes
+                next_followup_check = current_time + 3600  # Set next follow-up in 60 min
 
         except Exception:
             print("❌ Fatal error:")
             traceback.print_exc()
 
-        time.sleep(30)
+        time.sleep(900)  # Sleep 15 minutes before next reply check
