@@ -387,7 +387,7 @@ if __name__ == "__main__":
             if current_time >= next_followup_check:
                 print("\n--- Sending follow-up emails ---")
                 process_followups()  # Send follow-ups every 60 minutes
-                next_followup_check = current_time + 3600  # Set next follow-up in 60 min
+                next_followup_check = current_time + 86400  # every 24 hours
 
         except Exception:
             print("❌ Fatal error:")
