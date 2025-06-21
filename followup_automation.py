@@ -230,6 +230,20 @@ def process_followups():
                 print(f"\nRow {idx}: Checking {row.get('Email')}")
                 if not any(row.values()):
                     continue
+                rgb = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
+                if rgb:
+                    r, g, b = rgb
+                    if r > 240 and g > 240 and b > 240:
+                        print(f"Row {idx} is white (no color), processing.")
+                    elif r > 180 and g < 100 and b < 100:
+                        print(f"Row {idx} is red, skipping.")
+                        continue
+                    elif r < 100 and g > 180 and b < 100:
+                        print(f"Row {idx} is green, skipping.")
+                        continue
+                    elif abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:
+                        print(f"Row {idx} is yellow, skipping.")
+                        continue
 
                 email_addr = row.get("Email", "").lower().strip()
                 if not email_addr:
