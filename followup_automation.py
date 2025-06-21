@@ -207,12 +207,23 @@ def process_replies():
             if not any(row.values()):
                 continue
             email_addr = row.get("Email", "").lower().strip()
-            if not email_addr:
-                continue
-            if email_addr in replied_emails and row.get("Reply Status", "") != "Replied":
-                print(f"Marking row {idx} ({email_addr}) as Replied in sheet.")
-                sheet.update_cell(idx, 7, "Replied")
-                set_row_color(sheet, idx, "#FFFF00")
+            rgb = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
+
+# Skip red background (R>180, G<100, B<100)
+            if rgb and rgb[0] > 180 and rgb[1] < 100 and rgb[2] < 100:
+               print(f"Row {idx} has red background, skipping.")
+               continue
+
+            # Skip green background (G>180)
+            if rgb and rgb[1] > 180:
+               print(f"Row {idx} has green background, skipping.")
+               continue
+
+# Skip yellow background (R≈255, G≈255, B<50)
+           if rgb and abs(rgb[0] - 255) < 10 and abs(rgb[1] - 255) < 10 and rgb[2] < 50:
+              print(f"Row {idx} has yellow background, skipping.")
+              continue
+
     except Exception as e:
         print("❌ Error in processing replies:", e)
 
