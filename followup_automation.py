@@ -133,6 +133,72 @@ def hex_to_rgb(hex_color):
         "green": int(hex_color[2:4], 16) / 255,
         "blue": int(hex_color[4:6], 16) / 255
     }
+def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
+    try:
+        range_ = f"{sheet_name}!A{start_row}:A{end_row}"
+        result = sheets_api.spreadsheets().get(
+            spreadsheetId=sheet_id,
+            ranges=[range_],
+            fields="sheets.data.rowData.values.effectiveFormat.backgroundColor"
+        ).execute()
+
+        rows = result['sheets'][0]['data'][0]['rowData']
+        row_colors = []
+        for row in rows:
+            color = row['values'][0].get('effectiveFormat', {}).get('backgroundColor', {})
+            rgb = (
+                int(color.get('red', 0) * 255),
+                int(color.get('green', 0) * 255),
+                int(color.get('blue', 0) * 255)
+            )
+            row_colors.append(rgb)
+        return row_colors
+    except Exception as e:
+        print(f"❌ Failed to fetch all row colors: {e}")
+        return []
+
+def batch_update_cells(sheet_id, updates):
+    try:
+        body = {
+            "valueInputOption": "USER_ENTERED",
+            "data": updates
+        }
+        sheets_api.spreadsheets().values().batchUpdate(
+            spreadsheetId=sheet_id,
+            body=body
+        ).execute()
+        print("✅ Batch update of cell values complete.")
+    except Exception as e:
+        print(f"❌ Failed batch cell update: {e}")
+
+def batch_color_rows(sheet_id, start_row_index_color_map):
+    requests = []
+    for row_idx, hex_color in start_row_index_color_map.items():
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": row_idx - 1,
+                    "endRowIndex": row_idx,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColorStyle": {
+                            "rgbColor": hex_to_rgb(hex_color)
+                        }
+                    }
+                },
+                "fields": "userEnteredFormat.backgroundColorStyle"
+            }
+        })
+
+    try:
+        sheets_api.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id, body={"requests": requests}
+        ).execute()
+        print("✅ Batch row coloring done.")
+    except Exception as e:
+        print(f"❌ Batch row coloring failed: {e}")
 
 def set_row_color(sheet, row_number, color_hex):
     print(f"Coloring row {row_number} with color {color_hex}")
@@ -186,35 +252,39 @@ def process_replies():
     try:
         data = sheet.get_all_records()
         replied_emails = get_reply_emails()
+        updates = []
+        color_updates = {}
+      
+        row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
                 continue
 
             email_addr = row.get("Email", "").lower().strip()
-            rgb = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
-
-            if rgb:
-                r, g, b = rgb
-
-                if r > 240 and g > 240 and b > 240:
-                    print(f"Row {idx} is white (no color), processing.")
-                if r > 180 and g < 100 and b < 100:
-                    print(f"Row {idx} is red, skipping.")
-                    continue
-                if r < 100 and g > 180 and b < 100:
-                    print(f"Row {idx} is green, skipping.")
-                    continue
-                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:
-                    print(f"Row {idx} is yellow, skipping.")
-                    continue
-
-            if not email_addr:
+            if not email_addr or row.get("Reply Status", "") == "Replied":
                 continue
 
-            if email_addr in replied_emails and row.get("Reply Status", "") != "Replied":
-                print(f"Marking row {idx} ({email_addr}) as Replied.")
-                sheet.update_cell(idx, 7, "Replied")
-                set_row_color(sheet, idx, "#FFFF00")  # Yellow
+            rgb = row_colors[idx - 2]
+            if rgb:
+                r, g, b = rgb
+                if r > 180 and g < 100 and b < 100:  # Red
+                    continue
+                if r < 100 and g > 180 and b < 100:  # Green
+                    continue
+                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:  # Yellow
+                    continue
+
+            if email_addr in replied_emails:
+                updates.append({
+                    "range": f"{sheet.title}!G{idx}",
+                    "values": [["Replied"]]
+                })
+                color_updates[idx] = "#FFFF00"
+
+        if updates:
+            batch_update_cells(sheet.spreadsheet.id, updates)
+        if color_updates:
+            batch_color_rows(sheet._properties['sheetId'], color_updates)
 
     except Exception as e:
         print("❌ Error in processing replies:", e)
@@ -224,76 +294,80 @@ def process_followups():
     try:
         data = sheet.get_all_records()
         today = datetime.today().strftime('%Y-%m-%d')
-
+        updates = []
+        color_updates = {}
+      
+        row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
+      
         for idx, row in enumerate(data, start=2):
-            try:
-                print(f"\nRow {idx}: Checking {row.get('Email')}")
-                if not any(row.values()):
-                    continue
-                rgb = get_row_background_color(sheet.spreadsheet.id, sheet.title, idx)
-                if rgb:
-                    r, g, b = rgb
-                    if r > 240 and g > 240 and b > 240:
-                        print(f"Row {idx} is white (no color), processing.")
-                    elif r > 180 and g < 100 and b < 100:
-                        print(f"Row {idx} is red, skipping.")
-                        continue
-                    elif r < 100 and g > 180 and b < 100:
-                        print(f"Row {idx} is green, skipping.")
-                        continue
-                    elif abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:
-                        print(f"Row {idx} is yellow, skipping.")
-                        continue
+            if not any(row.values()):
+                continue
 
-                email_addr = row.get("Email", "").lower().strip()
-                if not email_addr:
+            rgb = row_colors[idx - 2]
+            if rgb:
+                r, g, b = rgb
+                if r > 180 and g < 100 and b < 100:  # Red
+                    continue
+                if r < 100 and g > 180 and b < 100:  # Green
+                    continue
+                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:  # Yellow
                     continue
 
-                name = row.get("First_Name", "").strip()
-                count = int(row.get("Follow-Up Count") or 0)
-                last_date = row.get("Last Follow-Up Date", "")
-                reply_status = row.get("Reply Status", "").strip()
+            email_addr = row.get("Email", "").lower().strip()
+            if not email_addr:
+                continue
 
-                if reply_status in ["Replied", "No Reply After 4"]:
+            name = row.get("First_Name", "").strip()
+            count = int(row.get("Follow-Up Count") or 0)
+            last_date = row.get("Last Follow-Up Date", "")
+            reply_status = row.get("Reply Status", "").strip()
+
+            if reply_status in ["Replied", "No Reply After 4 Followups"]:
+                continue
+
+            if last_date:
+                last_dt = datetime.strptime(last_date, "%Y-%m-%d")
+                if (datetime.now() - last_dt).total_seconds() < 86400:
                     continue
 
-                if last_date:
-                    last_dt = datetime.strptime(last_date, "%Y-%m-%d")
-                    if (datetime.now() - last_dt).total_seconds() < 86400:
-                        continue
+            if count >= 4:
+                send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
+                updates.append({"range": f"{sheet.title}!G{idx}", "values": [["No Reply After 4 Followups"]]})
+                color_updates[idx] = "#FF0000"
+                continue
 
-                if count >= 4:
-                    send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
-                    sheet.update_cell(idx, 7, "No Reply After 4 Followups")
-                    set_row_color(sheet, idx, "#FF0000")
+            followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
+            subject = FOLLOWUP_SUBJECTS[count]
+
+            if count == 0:
+                show = row.get("Show", "").strip()
+                if not show:
                     continue
+                followup_text = followup_text.replace("{%show%}", show)
+                subject = subject.replace("{%show%}", show)
+            elif count == 1:
+                url = row.get("Pitch Deck URL", "").strip()
+                if not url:
+                    continue
+                followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
-                followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
-                subject = FOLLOWUP_SUBJECTS[count]
+            send_email(email_addr, subject, followup_text, name=name)
 
-                if count == 0:
-                    show = row.get("Show", "").strip()
-                    if not show:
-                        continue
-                    followup_text = followup_text.replace("{%show%}", show)
-                    subject = subject.replace("{%show%}", show)
-                elif count == 1:
-                    url = row.get("Pitch Deck URL", "").strip()
-                    if not url:
-                        continue
-                    followup_text = followup_text.replace("{%pitch_deck_url%}", url)
+            updates.extend([
+                {"range": f"{sheet.title}!E{idx}", "values": [[str(count + 1)]]},
+                {"range": f"{sheet.title}!F{idx}", "values": [[today]]},
+                {"range": f"{sheet.title}!G{idx}", "values": [["Pending"]]}
+            ])
 
-                send_email(email_addr, subject, followup_text, name=name)
-                sheet.update_cell(idx, 5, str(count + 1))
-                sheet.update_cell(idx, 6, today)
-                sheet.update_cell(idx, 7, "Pending")
+            if (idx - 1) % 3 == 0:
+                print("Sleeping for 3 seconds...")
+                time.sleep(3)
 
-                if (idx - 1) % 3 == 0:
-                    print("Sleeping for 3 seconds...")
-                    time.sleep(3)
+        if updates:
+            batch_update_cells(sheet.spreadsheet.id, updates)
+        if color_updates:
+            batch_color_rows(sheet._properties['sheetId'], color_updates)
 
-            except Exception as e:
-                print(f"❌ Error on row {idx}: {e}")
     except Exception as e:
         print("❌ Error in processing followups:", e)
 
