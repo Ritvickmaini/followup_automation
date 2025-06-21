@@ -372,6 +372,7 @@ def process_followups():
         print("❌ Error in processing followups:", e)
 
 # === Entry Point ===
+# === Main Function ===
 if __name__ == "__main__":
     print("🚀 Sales follow-up automation started...")
     next_followup_check = time.time()
@@ -379,17 +380,17 @@ if __name__ == "__main__":
     while True:
         try:
             print("\n--- Checking for replies ---")
-            process_replies()  # Every 15 minutes
+            process_replies()  # Check for replies every 30 seconds
 
             current_time = time.time()
 
             if current_time >= next_followup_check:
                 print("\n--- Sending follow-up emails ---")
-                process_followups()  # Every 60 minutes
+                process_followups()  # Send follow-ups every 60 minutes
                 next_followup_check = current_time + 3600  # Set next follow-up in 60 min
 
         except Exception:
             print("❌ Fatal error:")
             traceback.print_exc()
 
-        time.sleep(900)  # Sleep 15 minutes before next reply check
+        time.sleep(30)  # Sleep 30 seconds before next reply check
