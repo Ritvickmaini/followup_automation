@@ -171,9 +171,11 @@ def batch_update_cells(sheet_id, updates):
     except Exception as e:
         print(f"❌ Failed batch cell update: {e}")
 
-def batch_color_rows(sheet_id, start_row_index_color_map):
+def batch_color_rows(spreadsheet_id, start_row_index_color_map, sheet_id):
     requests = []
     for row_idx, hex_color in start_row_index_color_map.items():
+        rgb = hex_to_rgb(hex_color)
+        print(f"🎨 Coloring row {row_idx} with {hex_color} => RGB {rgb}")
         requests.append({
             "repeatCell": {
                 "range": {
@@ -183,20 +185,18 @@ def batch_color_rows(sheet_id, start_row_index_color_map):
                 },
                 "cell": {
                     "userEnteredFormat": {
-                        "backgroundColorStyle": {
-                            "rgbColor": hex_to_rgb(hex_color)
-                        }
+                        "backgroundColor": rgb
                     }
                 },
-                "fields": "userEnteredFormat.backgroundColorStyle"
+                "fields": "userEnteredFormat.backgroundColor"
             }
         })
 
     try:
-        sheets_api.spreadsheets().batchUpdate(
-            spreadsheetId=sheet_id, body={"requests": requests}
+        response = sheets_api.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id, body={"requests": requests}
         ).execute()
-        print("✅ Batch row coloring done.")
+        print(f"✅ Batch row coloring done. Response: {json.dumps(response, indent=2)}")
     except Exception as e:
         print(f"❌ Batch row coloring failed: {e}")
 
