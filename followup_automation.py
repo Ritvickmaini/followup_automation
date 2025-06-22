@@ -133,6 +133,7 @@ def hex_to_rgb(hex_color):
         "green": int(hex_color[2:4], 16) / 255,
         "blue": int(hex_color[4:6], 16) / 255
     }
+
 def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
     try:
         range_ = f"{sheet_name}!A{start_row}:A{end_row}"
@@ -254,7 +255,7 @@ def process_replies():
         replied_emails = get_reply_emails()
         updates = []
         color_updates = {}
-      
+
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
@@ -296,10 +297,10 @@ def process_followups():
         today = datetime.today().strftime('%Y-%m-%d')
         updates = []
         color_updates = {}
-      
+
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
-        sent_tracker = set()  # ✅ New: Track emails already sent in this cycle
-      
+        sent_tracker = set()
+
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
                 continue
@@ -315,7 +316,7 @@ def process_followups():
                     continue
 
             email_addr = row.get("Email", "").lower().strip()
-            if not email_addr or email_addr in sent_tracker:  # ✅ Skip if already sent in this run:
+            if not email_addr or email_addr in sent_tracker:
                 continue
 
             name = row.get("First_Name", "").strip()
@@ -335,32 +336,39 @@ def process_followups():
                 send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
                 updates.append({"range": f"{sheet.title}!G{idx}", "values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
-                sent_tracker.add(email_addr)  # ✅ Track even final emails
+                sent_tracker.add(email_addr)
                 continue
 
-            followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
-            subject = FOLLOWUP_SUBJECTS[count]
+            next_count = count
 
-            if count == 0:
-                show = row.get("Show", "").strip()
-                if not show:
-                    continue
-                followup_text = followup_text.replace("{%show%}", show)
-                subject = subject.replace("{%show%}", show)
-            elif count == 1:
-                url = row.get("Pitch Deck URL", "").strip()
-                if not url:
-                    continue
-                followup_text = followup_text.replace("{%pitch_deck_url%}", url)
+            try:
+                followup_text = FOLLOWUP_EMAILS[next_count].replace("{%name%}", name)
+                subject = FOLLOWUP_SUBJECTS[next_count]
 
-            send_email(email_addr, subject, followup_text, name=name)
-            sent_tracker.add(email_addr)  # ✅ Add email to tracker
+                if next_count == 0:
+                    show = row.get("Show", "").strip()
+                    if not show:
+                        continue
+                    followup_text = followup_text.replace("{%show%}", show)
+                    subject = subject.replace("{%show%}", show)
+                elif next_count == 1:
+                    url = row.get("Pitch Deck URL", "").strip()
+                    if not url:
+                        continue
+                    followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
-            updates.extend([
-                {"range": f"{sheet.title}!E{idx}", "values": [[str(count + 1)]]},
-                {"range": f"{sheet.title}!F{idx}", "values": [[today]]},
-                {"range": f"{sheet.title}!G{idx}", "values": [["Pending"]]}
-            ])
+                send_email(email_addr, subject, followup_text, name=name)
+                sent_tracker.add(email_addr)
+
+                updates.extend([
+                    {"range": f"{sheet.title}!E{idx}", "values": [[str(next_count + 1)]]},
+                    {"range": f"{sheet.title}!F{idx}", "values": [[today]]},
+                    {"range": f"{sheet.title}!G{idx}", "values": [["Pending"]]}
+                ])
+
+            except Exception as e:
+                print(f"❌ Failed to prepare/send follow-up email to {email_addr}: {e}")
+                continue
 
             if (idx - 1) % 3 == 0:
                 print("Sleeping for 3 seconds...")
@@ -375,25 +383,23 @@ def process_followups():
         print("❌ Error in processing followups:", e)
 
 # === Entry Point ===
-# === Main Function ===
 if __name__ == "__main__":
     print("🚀 Sales follow-up automation started...")
     next_followup_check = time.time()
-    
+
     while True:
         try:
             print("\n--- Checking for replies ---")
-            process_replies()  # Check for replies every 30 seconds
+            process_replies()
 
             current_time = time.time()
-
             if current_time >= next_followup_check:
                 print("\n--- Sending follow-up emails ---")
-                process_followups()  # Send follow-ups every 60 minutes
+                process_followups()
                 next_followup_check = current_time + 86400  # every 24 hours
 
         except Exception:
             print("❌ Fatal error:")
             traceback.print_exc()
 
-        time.sleep(30)  # Sleep 30 seconds before next reply check
+        time.sleep(30)
