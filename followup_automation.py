@@ -320,7 +320,13 @@ def process_followups():
                 continue
 
             name = row.get("First_Name", "").strip()
-            count = int(row.get("Follow-Up Count") or 0)
+            try:
+              count = int(row.get("Follow-Up Count"))
+              if count < 0:
+                count = 0
+              except:
+                count = 0
+                
             last_date = row.get("Last Follow-Up Date", "")
             reply_status = row.get("Reply Status", "").strip()
 
@@ -359,6 +365,8 @@ def process_followups():
 
                 send_email(email_addr, subject, followup_text, name=name)
                 sent_tracker.add(email_addr)
+
+                print(f"Row {idx}: Sent template {next_count + 1} to {email_addr}")
 
                 updates.extend([
                     {"range": f"{sheet.title}!E{idx}", "values": [[str(next_count + 1)]]},
