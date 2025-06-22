@@ -320,13 +320,13 @@ def process_followups():
                 continue
 
             name = row.get("First_Name", "").strip()
-          
+
             try:
-               count = int(row.get("Follow-Up Count"))
-               if count < 0:
-                   count = 0
-           except:
-               count = 0
+                count = int(row.get("Follow-Up Count"))
+                if count < 0:
+                    count = 0
+            except:
+                count = 0
 
             last_date = row.get("Last Follow-Up Date", "")
             reply_status = row.get("Reply Status", "").strip()
@@ -412,3 +412,4 @@ if __name__ == "__main__":
             traceback.print_exc()
 
         time.sleep(30)
+
