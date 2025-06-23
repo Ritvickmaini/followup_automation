@@ -266,14 +266,8 @@ def process_replies():
                 continue
 
             rgb = row_colors[idx - 2]
-            if rgb:
-                r, g, b = rgb
-                if r > 180 and g < 100 and b < 100:  # Red
-                    continue
-                if r < 100 and g > 180 and b < 100:  # Green
-                    continue
-                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:  # Yellow
-                    continue
+            if rgb and rgb != (255, 255, 255):
+                continue
 
             if email_addr in replied_emails:
                 updates.append({
@@ -306,14 +300,8 @@ def process_followups():
                 continue
 
             rgb = row_colors[idx - 2]
-            if rgb:
-                r, g, b = rgb
-                if r > 180 and g < 100 and b < 100:  # Red
-                    continue
-                if r < 100 and g > 180 and b < 100:  # Green
-                    continue
-                if abs(r - 255) < 10 and abs(g - 255) < 10 and b < 50:  # Yellow
-                    continue
+            if rgb and rgb != (255, 255, 255):
+                continue
 
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or email_addr in sent_tracker:
