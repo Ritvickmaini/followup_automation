@@ -44,8 +44,8 @@ EMAIL_TEMPLATE = """
       <strong>Nagendra Mishra</strong><br>
       Director | B2B Growth Hub<br>
       Mo: +44 7913 027482<br>
-      Email: <a href="mailto:nagendra@b2bgrowthhub.com">nagendra@b2bgrowthhub.com</a><br>
-      <a href="https://www.b2bgrowthhub.com" target="_blank">www.b2bgrowthhub.com</a>
+      Email: <a href="mailto:nagendra@b2bgrowthexpo.com">nagendra@b2bgrowthexpo.com</a><br>
+      <a href="https://www.b2bgrowthexpo.com" target="_blank">www.b2bgrowthexpo.com</a>
     </p>
     <p style="font-size: 13px; color: #888;">
       If you don’t want to hear from me again, please let me know.
