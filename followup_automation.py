@@ -16,7 +16,7 @@ import os
 SMTP_SERVER = "mail.b2bgrowthexpo.com"
 SMTP_PORT = 587
 SMTP_EMAIL = "nagendra@b2bgrowthexpo.com"
-SMTP_PASSWORD = "tdA^87%+.3$3"
+SMTP_PASSWORD = "D@shwood0404"
 
 IMAP_SERVER = "mail.b2bgrowthexpo.com"
 IMAP_PORT = 143
