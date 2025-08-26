@@ -111,20 +111,37 @@ def send_email(to_email, subject, body, name=""):
 def get_reply_emails():
     print("Checking for new replies in inbox...")
     replied = set()
+
     try:
-        with imaplib.IMAP4_SSL(IMAP_SERVER) as mail:
+        # --- Try SSL first (port 993) ---
+        try:
+            mail = imaplib.IMAP4_SSL(IMAP_SERVER, 993)
             mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-            mail.select("inbox")
-            status, messages = mail.search(None, 'UNSEEN')
+            print("✅ Connected via IMAP SSL (993)")
+        except Exception as ssl_err:
+            print(f"⚠️ SSL connection failed: {ssl_err}")
+            print("🔄 Trying STARTTLS on port 143...")
+            mail = imaplib.IMAP4(IMAP_SERVER, 143)
+            mail.starttls()
+            mail.login(IMAP_EMAIL, IMAP_PASSWORD)
+            print("✅ Connected via IMAP STARTTLS (143)")
+
+        mail.select("INBOX")
+        status, messages = mail.search(None, 'UNSEEN')
+        if status == "OK":
             for num in messages[0].split():
                 _, data = mail.fetch(num, "(RFC822)")
                 msg = email.message_from_bytes(data[0][1])
                 from_addr = email.utils.parseaddr(msg["From"])[1].lower().strip()
                 replied.add(from_addr)
+        mail.logout()
+
     except Exception as e:
         print(f"❌ IMAP Error while checking replies: {e}")
+
     print(f"✅ Found {len(replied)} new replies.")
     return replied
+
 
 def hex_to_rgb(hex_color):
     hex_color = hex_color.lstrip('#')
