@@ -288,7 +288,7 @@ def process_replies():
 
             if email_addr in replied_emails:
                 updates.append({
-                    "range": f"{sheet.title}!G{idx}",
+                    "range": f"{sheet.title}!R{idx}",
                     "values": [["Replied"]]
                 })
                 color_updates[idx] = "#FFFF00"
@@ -346,7 +346,7 @@ def process_followups():
 
             if count >= 4:
                 send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
-                updates.append({"range": f"{sheet.title}!G{idx}", "values": [["No Reply After 4 Followups"]]})
+                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
                 sent_tracker.add(email_addr)
                 continue
@@ -375,9 +375,9 @@ def process_followups():
                 print(f"Row {idx}: Sent template {next_count + 1} to {email_addr}")
 
                 updates.extend([
-                    {"range": f"{sheet.title}!E{idx}", "values": [[str(next_count + 1)]]},
-                    {"range": f"{sheet.title}!F{idx}", "values": [[today]]},
-                    {"range": f"{sheet.title}!G{idx}", "values": [["Pending"]]}
+                    {"range": f"{sheet.title}!P{idx}", "values": [[str(next_count + 1)]]},
+                    {"range": f"{sheet.title}!Q{idx}", "values": [[today]]},
+                    {"range": f"{sheet.title}!R{idx}", "values": [["Pending"]]}
                 ])
 
             except Exception as e:
