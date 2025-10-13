@@ -228,29 +228,40 @@ def process_replies():
     try:
         data = sheet.get_all_records()
         replied_emails = get_reply_emails()
+        if not replied_emails:
+            print("⚠️ No new replies found. Skipping color check.", flush=True)
+            return
+
         updates = []
         color_updates = {}
+        # Fetch row colors ONLY if replies found
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
+
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
+
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or row.get("Reply Status", "") == "Replied":
                 print(f"⚠️ Row {idx}: Email missing or already Replied, skipping...", flush=True)
                 continue
+
             rgb = row_colors[idx - 2]
             if rgb and rgb != (255, 255, 255):
                 print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
                 continue
+
             if email_addr in replied_emails:
                 updates.append({"range": f"{sheet.title}!R{idx}", "values": [["Replied"]]})
                 color_updates[idx] = "#FFFF00"
                 print(f"✅ Row {idx}: Email {email_addr} marked as Replied.", flush=True)
+
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
         if color_updates:
             batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
+
     except Exception as e:
         print(f"❌ Error in processing replies: {e}", flush=True)
 
