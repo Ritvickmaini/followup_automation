@@ -157,6 +157,7 @@ def hex_to_rgb(hex_color):
         "blue": int(hex_color[4:6], 16) / 255
     }
 
+# --- UPDATED: Safe row color fetching ---
 def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
     print(f"🎨 Fetching row colors for rows {start_row} to {end_row}...", flush=True)
     try:
@@ -166,22 +167,29 @@ def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
             ranges=[range_],
             fields="sheets.data.rowData.values.effectiveFormat.backgroundColor"
         ).execute()
-        rows = result['sheets'][0]['data'][0]['rowData']
         row_colors = []
-        for row in rows:
-            color = row['values'][0].get('effectiveFormat', {}).get('backgroundColor', {})
-            rgb = (
-                int(color.get('red', 0) * 255),
-                int(color.get('green', 0) * 255),
-                int(color.get('blue', 0) * 255)
-            )
+        row_data_list = result['sheets'][0]['data'][0].get('rowData', [])
+        for row in row_data_list:
+            if 'values' in row and len(row['values']) > 0:
+                color = row['values'][0].get('effectiveFormat', {}).get('backgroundColor', {})
+                rgb = (
+                    int(color.get('red', 0) * 255),
+                    int(color.get('green', 0) * 255),
+                    int(color.get('blue', 0) * 255)
+                )
+            else:
+                rgb = (255, 255, 255)
             row_colors.append(rgb)
-        print(f"✅ Row colors fetched successfully.", flush=True)
+        # Pad missing rows
+        while len(row_colors) < (end_row - start_row + 1):
+            row_colors.append((255, 255, 255))
+        print(f"✅ Fetched {len(row_colors)} row colors.", flush=True)
         return row_colors
     except Exception as e:
         print(f"❌ Failed to fetch all row colors: {e}", flush=True)
-        return []
+        return [(255, 255, 255)] * (end_row - start_row + 1)
 
+# === Batch Updates ===
 def batch_update_cells(sheet_id, updates):
     print(f"🔄 Performing batch update on {len(updates)} cells...", flush=True)
     try:
@@ -227,27 +235,22 @@ def process_replies():
             if not any(row.values()):
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
-
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or row.get("Reply Status", "") == "Replied":
                 print(f"⚠️ Row {idx}: Email missing or already Replied, skipping...", flush=True)
                 continue
-
             rgb = row_colors[idx - 2]
             if rgb and rgb != (255, 255, 255):
                 print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
                 continue
-
             if email_addr in replied_emails:
                 updates.append({"range": f"{sheet.title}!R{idx}", "values": [["Replied"]]})
                 color_updates[idx] = "#FFFF00"
                 print(f"✅ Row {idx}: Email {email_addr} marked as Replied.", flush=True)
-
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
         if color_updates:
             batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
-
     except Exception as e:
         print(f"❌ Error in processing replies: {e}", flush=True)
 
