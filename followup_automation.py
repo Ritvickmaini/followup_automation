@@ -353,24 +353,27 @@ def process_followups():
     except Exception as e:
         print(f"❌ Error in processing followups: {e}", flush=True)
 
-# === MAIN LOOP ===
 if __name__ == "__main__":
     print("🚀 Sales follow-up automation started...", flush=True)
-    next_followup_check = time.time()
+    next_followup_check = time.time()  # timestamp for next 24h followup
+
     while True:
         try:
+            # --- REPLIES: runs every 30 seconds ---
             print("\n--- Checking for replies ---", flush=True)
-            process_replies()
+            process_replies()  # this only checks emails and marks 'Replied'
 
+            # --- FOLLOWUPS: runs every 24 hours ---
             current_time = time.time()
             if current_time >= next_followup_check:
                 print("\n--- Sending follow-up emails ---", flush=True)
-                process_followups()
-                next_followup_check = current_time + 86400  # 24h
+                process_followups()  # this fetches row colors and sends emails
+                next_followup_check = current_time + 86400  # schedule next follow-up in 24h
 
         except Exception:
             print("❌ Fatal error:", flush=True)
             traceback.print_exc()
 
-        print("⏱ Sleeping 30 seconds before next cycle...", flush=True)
+        print("⏱ Sleeping 30 seconds before next reply check...", flush=True)
         time.sleep(30)
+
