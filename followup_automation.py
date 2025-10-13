@@ -55,11 +55,13 @@ EMAIL_TEMPLATE = """
 """
 
 # === Authenticate Google Sheets ===
+print("🔐 Authenticating Google Sheets...", flush=True)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_file('/etc/secrets/google-credentials.json', scopes=SCOPES)
 sheets_api = build("sheets", "v4", credentials=creds)
 gc = gspread.authorize(creds)
 sheet = gc.open("Expo-Sales-Management").worksheet("exhibitors-1")
+print("✅ Google Sheets authenticated and worksheet loaded.", flush=True)
 
 # === Follow-up Templates ===
 FOLLOWUP_EMAILS = [
@@ -82,8 +84,9 @@ FINAL_EMAIL = (
     "so we don’t keep reaching out unnecessarily."
 )
 
+# === Email Sending ===
 def send_email(to_email, subject, body, name=""):
-    print(f"Preparing to send email to: {to_email}")
+    print(f"✉️ Preparing to send email to: {to_email}", flush=True)
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"] = f"{SENDER_NAME} <{SMTP_EMAIL}>"
@@ -92,42 +95,47 @@ def send_email(to_email, subject, body, name=""):
     msg.attach(MIMEText(html_body, "html"))
 
     try:
+        print(f"🔄 Connecting to SMTP server {SMTP_SERVER}:{SMTP_PORT}...", flush=True)
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls()
+            print("🔑 Logging into SMTP server...", flush=True)
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.sendmail(SMTP_EMAIL, to_email, msg.as_string())
-        print(f"✅ Email sent to {to_email}")
+        print(f"✅ Email sent successfully to {to_email}", flush=True)
     except Exception as e:
-        print(f"❌ SMTP Error while sending to {to_email}: {e}")
+        print(f"❌ SMTP Error while sending to {to_email}: {e}", flush=True)
 
     try:
+        print(f"🔄 Saving email to Sent folder via IMAP...", flush=True)
         imap = imaplib.IMAP4_SSL(IMAP_SERVER)
         imap.login(SMTP_EMAIL, SMTP_PASSWORD)
         imap.append("INBOX.Sent", '', imaplib.Time2Internaldate(time.time()), msg.as_bytes())
         imap.logout()
+        print(f"✅ Email saved in Sent folder for {to_email}", flush=True)
     except Exception as e:
-        print(f"❌ IMAP Error while saving to Sent folder for {to_email}: {e}")
+        print(f"❌ IMAP Error while saving to Sent folder for {to_email}: {e}", flush=True)
 
+# === Fetch replies from inbox ===
 def get_reply_emails():
-    print("Checking for new replies in inbox...")
+    print("🔍 Checking for new replies in inbox...", flush=True)
     replied = set()
-
     try:
-        # --- Try SSL first (port 993) ---
         try:
+            print("🔐 Trying IMAP SSL connection on port 993...", flush=True)
             mail = imaplib.IMAP4_SSL(IMAP_SERVER, 993)
             mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-            print("✅ Connected via IMAP SSL (993)")
+            print("✅ Connected via IMAP SSL (993)", flush=True)
         except Exception as ssl_err:
-            print(f"⚠️ SSL connection failed: {ssl_err}")
-            print("🔄 Trying STARTTLS on port 143...")
+            print(f"⚠️ SSL connection failed: {ssl_err}", flush=True)
+            print("🔄 Trying STARTTLS on port 143...", flush=True)
             mail = imaplib.IMAP4(IMAP_SERVER, 143)
             mail.starttls()
             mail.login(IMAP_EMAIL, IMAP_PASSWORD)
-            print("✅ Connected via IMAP STARTTLS (143)")
+            print("✅ Connected via IMAP STARTTLS (143)", flush=True)
 
         mail.select("INBOX")
         status, messages = mail.search(None, 'UNSEEN')
+        print(f"📬 IMAP search status: {status}", flush=True)
         if status == "OK":
             for num in messages[0].split():
                 _, data = mail.fetch(num, "(RFC822)")
@@ -135,16 +143,14 @@ def get_reply_emails():
                 from_addr = email.utils.parseaddr(msg["From"])[1].lower().strip()
                 replied.add(from_addr)
         mail.logout()
-
+        print(f"✅ Found {len(replied)} new replies.", flush=True)
     except Exception as e:
-        print(f"❌ IMAP Error while checking replies: {e}")
+        print(f"❌ IMAP Error while checking replies: {e}", flush=True)
 
-    print(f"✅ Found {len(replied)} new replies.")
     return replied
 
-
+# === Google Sheets helpers ===
 def hex_to_rgb(hex_color):
-    hex_color = hex_color.lstrip('#')
     return {
         "red": int(hex_color[0:2], 16) / 255,
         "green": int(hex_color[2:4], 16) / 255,
@@ -152,6 +158,7 @@ def hex_to_rgb(hex_color):
     }
 
 def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
+    print(f"🎨 Fetching row colors for rows {start_row} to {end_row}...", flush=True)
     try:
         range_ = f"{sheet_name}!A{start_row}:A{end_row}"
         result = sheets_api.spreadsheets().get(
@@ -159,7 +166,6 @@ def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
             ranges=[range_],
             fields="sheets.data.rowData.values.effectiveFormat.backgroundColor"
         ).execute()
-
         rows = result['sheets'][0]['data'][0]['rowData']
         row_colors = []
         for row in rows:
@@ -170,128 +176,72 @@ def get_all_row_colors(sheet_id, sheet_name, start_row=2, end_row=1000):
                 int(color.get('blue', 0) * 255)
             )
             row_colors.append(rgb)
+        print(f"✅ Row colors fetched successfully.", flush=True)
         return row_colors
     except Exception as e:
-        print(f"❌ Failed to fetch all row colors: {e}")
+        print(f"❌ Failed to fetch all row colors: {e}", flush=True)
         return []
 
 def batch_update_cells(sheet_id, updates):
+    print(f"🔄 Performing batch update on {len(updates)} cells...", flush=True)
     try:
-        body = {
-            "valueInputOption": "USER_ENTERED",
-            "data": updates
-        }
+        body = {"valueInputOption": "USER_ENTERED", "data": updates}
         sheets_api.spreadsheets().values().batchUpdate(
-            spreadsheetId=sheet_id,
-            body=body
+            spreadsheetId=sheet_id, body=body
         ).execute()
-        print("✅ Batch update of cell values complete.")
+        print("✅ Batch update of cell values complete.", flush=True)
     except Exception as e:
-        print(f"❌ Failed batch cell update: {e}")
+        print(f"❌ Failed batch cell update: {e}", flush=True)
 
 def batch_color_rows(spreadsheet_id, start_row_index_color_map, sheet_id):
+    print(f"🔄 Coloring {len(start_row_index_color_map)} rows...", flush=True)
     requests = []
     for row_idx, hex_color in start_row_index_color_map.items():
         rgb = hex_to_rgb(hex_color)
-        print(f"🎨 Coloring row {row_idx} with {hex_color} => RGB {rgb}")
+        print(f"🎨 Coloring row {row_idx} with {hex_color} => RGB {rgb}", flush=True)
         requests.append({
             "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                    "startRowIndex": row_idx - 1,
-                    "endRowIndex": row_idx,
-                },
-                "cell": {
-                    "userEnteredFormat": {
-                        "backgroundColor": rgb
-                    }
-                },
+                "range": {"sheetId": sheet_id, "startRowIndex": row_idx - 1, "endRowIndex": row_idx},
+                "cell": {"userEnteredFormat": {"backgroundColor": rgb}},
                 "fields": "userEnteredFormat.backgroundColor"
             }
         })
-
     try:
         response = sheets_api.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id, body={"requests": requests}
         ).execute()
-        print(f"✅ Batch row coloring done. Response: {json.dumps(response, indent=2)}")
+        print(f"✅ Batch row coloring done. Response: {json.dumps(response, indent=2)}", flush=True)
     except Exception as e:
-        print(f"❌ Batch row coloring failed: {e}")
+        print(f"❌ Batch row coloring failed: {e}", flush=True)
 
-def set_row_color(sheet, row_number, color_hex):
-    print(f"Coloring row {row_number} with color {color_hex}")
-    try:
-        sheet_format = {
-            "requests": [{
-                "repeatCell": {
-                    "range": {
-                        "sheetId": sheet._properties['sheetId'],
-                        "startRowIndex": row_number - 1,
-                        "endRowIndex": row_number,
-                    },
-                    "cell": {
-                        "userEnteredFormat": {
-                            "backgroundColorStyle": {
-                                "rgbColor": hex_to_rgb(color_hex)
-                            }
-                        }
-                    },
-                    "fields": "userEnteredFormat.backgroundColorStyle"
-                }
-            }]
-        }
-        sheet.spreadsheet.batch_update(sheet_format)
-    except Exception as e:
-        print(f"❌ Google Sheets Error while coloring row {row_number}: {e}")
-
-def get_row_background_color(sheet_id, sheet_name, row_number):
-    try:
-        range_ = f"{sheet_name}!A{row_number}"
-        result = sheets_api.spreadsheets().get(
-            spreadsheetId=sheet_id,
-            ranges=[range_],
-            fields="sheets.data.rowData.values.effectiveFormat.backgroundColor"
-        ).execute()
-
-        cell_format = result['sheets'][0]['data'][0]['rowData'][0]['values'][0]['effectiveFormat']['backgroundColor']
-        rgb = (
-            int(cell_format.get('red', 0) * 255),
-            int(cell_format.get('green', 0) * 255),
-            int(cell_format.get('blue', 0) * 255)
-        )
-        print(f"Row {row_number} color fetched: RGB{rgb}")
-        return rgb
-    except Exception as e:
-        print(f"❌ Error getting background color for row {row_number}: {e}")
-        return None
-
+# === Replies Processing ===
 def process_replies():
-    print("Processing replies...")
+    print("🔁 Processing replies...", flush=True)
     try:
         data = sheet.get_all_records()
         replied_emails = get_reply_emails()
         updates = []
         color_updates = {}
-
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
+                print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
 
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or row.get("Reply Status", "") == "Replied":
+                print(f"⚠️ Row {idx}: Email missing or already Replied, skipping...", flush=True)
                 continue
 
             rgb = row_colors[idx - 2]
             if rgb and rgb != (255, 255, 255):
+                print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
                 continue
 
             if email_addr in replied_emails:
-                updates.append({
-                    "range": f"{sheet.title}!R{idx}",
-                    "values": [["Replied"]]
-                })
+                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["Replied"]]})
                 color_updates[idx] = "#FFFF00"
+                print(f"✅ Row {idx}: Email {email_addr} marked as Replied.", flush=True)
 
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
@@ -299,33 +249,35 @@ def process_replies():
             batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
 
     except Exception as e:
-        print("❌ Error in processing replies:", e)
+        print(f"❌ Error in processing replies: {e}", flush=True)
 
+# === Follow-ups Processing ===
 def process_followups():
-    print("Processing follow-up emails...")
+    print("🔁 Processing follow-up emails...", flush=True)
     try:
         data = sheet.get_all_records()
         today = datetime.today().strftime('%Y-%m-%d')
         updates = []
         color_updates = {}
-
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
         sent_tracker = set()
 
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
+                print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
 
             rgb = row_colors[idx - 2]
             if rgb and rgb != (255, 255, 255):
+                print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
                 continue
 
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or email_addr in sent_tracker:
+                print(f"⚠️ Row {idx}: Email missing or already sent in this cycle, skipping...", flush=True)
                 continue
 
             name = row.get("First_Name", "").strip()
-
             try:
                 count = int(row.get("Follow-Up Count"))
                 if count < 0:
@@ -335,13 +287,14 @@ def process_followups():
 
             last_date = row.get("Last Follow-Up Date", "")
             reply_status = row.get("Reply Status", "").strip()
-
             if reply_status in ["Replied", "No Reply After 4 Followups"]:
+                print(f"⚠️ Row {idx}: Already replied or finished followups, skipping...", flush=True)
                 continue
 
             if last_date:
                 last_dt = datetime.strptime(last_date, "%Y-%m-%d")
                 if (datetime.now() - last_dt).total_seconds() < 86400:
+                    print(f"⚠️ Row {idx}: Last followup sent less than 24h ago, skipping...", flush=True)
                     continue
 
             if count >= 4:
@@ -349,10 +302,10 @@ def process_followups():
                 updates.append({"range": f"{sheet.title}!R{idx}", "values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
                 sent_tracker.add(email_addr)
+                print(f"❌ Row {idx}: Max follow-ups reached, final email sent.", flush=True)
                 continue
 
             next_count = count
-
             try:
                 followup_text = FOLLOWUP_EMAILS[next_count].replace("{%name%}", name)
                 subject = FOLLOWUP_SUBJECTS[next_count]
@@ -360,19 +313,20 @@ def process_followups():
                 if next_count == 0:
                     show = row.get("Show", "").strip()
                     if not show:
+                        print(f"⚠️ Row {idx}: Show missing for first followup, skipping...", flush=True)
                         continue
                     followup_text = followup_text.replace("{%show%}", show)
                     subject = subject.replace("{%show%}", show)
                 elif next_count == 1:
                     url = row.get("Pitch Deck URL", "").strip()
                     if not url:
+                        print(f"⚠️ Row {idx}: Pitch Deck URL missing, skipping second followup...", flush=True)
                         continue
                     followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
                 send_email(email_addr, subject, followup_text, name=name)
                 sent_tracker.add(email_addr)
-
-                print(f"Row {idx}: Sent template {next_count + 1} to {email_addr}")
+                print(f"✅ Row {idx}: Sent followup {next_count+1} to {email_addr}", flush=True)
 
                 updates.extend([
                     {"range": f"{sheet.title}!P{idx}", "values": [[str(next_count + 1)]]},
@@ -381,11 +335,11 @@ def process_followups():
                 ])
 
             except Exception as e:
-                print(f"❌ Failed to prepare/send follow-up email to {email_addr}: {e}")
+                print(f"❌ Failed to prepare/send follow-up email to {email_addr}: {e}", flush=True)
                 continue
 
             if (idx - 1) % 3 == 0:
-                print("Sleeping for 3 seconds...")
+                print("⏱ Sleeping 3 seconds between emails...", flush=True)
                 time.sleep(3)
 
         if updates:
@@ -394,27 +348,26 @@ def process_followups():
             batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
 
     except Exception as e:
-        print("❌ Error in processing followups:", e)
+        print(f"❌ Error in processing followups: {e}", flush=True)
 
-# === Entry Point ===
+# === MAIN LOOP ===
 if __name__ == "__main__":
-    print("🚀 Sales follow-up automation started...")
+    print("🚀 Sales follow-up automation started...", flush=True)
     next_followup_check = time.time()
-
     while True:
         try:
-            print("\n--- Checking for replies ---")
+            print("\n--- Checking for replies ---", flush=True)
             process_replies()
 
             current_time = time.time()
             if current_time >= next_followup_check:
-                print("\n--- Sending follow-up emails ---")
+                print("\n--- Sending follow-up emails ---", flush=True)
                 process_followups()
-                next_followup_check = current_time + 86400  # every 24 hours
+                next_followup_check = current_time + 86400  # 24h
 
         except Exception:
-            print("❌ Fatal error:")
+            print("❌ Fatal error:", flush=True)
             traceback.print_exc()
 
+        print("⏱ Sleeping 30 seconds before next cycle...", flush=True)
         time.sleep(30)
-
