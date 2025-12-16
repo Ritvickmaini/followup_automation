@@ -62,6 +62,35 @@ sheets_api = build("sheets", "v4", credentials=creds)
 gc = gspread.authorize(creds)
 sheet = gc.open("Expo-Sales-Management").worksheet("exhibitors-1")
 print("✅ Google Sheets authenticated and worksheet loaded.", flush=True)
+EXPECTED_HEADERS = [
+    "Lead Date",
+    "Lead Source",
+    "First_Name",
+    "Last Name",
+    "Company Name",
+    "Mobile",
+    "Email",
+    "Show",
+    "Next Followup",
+    "Email-Count",
+    "Call Attempt",
+    "Linkedin Msg",
+    "Comments",
+    "Pitch Deck URL",
+    "Interested for",
+    "Follow-Up Count",
+    "Last Follow-Up Date",
+    "Reply Status",
+    "WhatsApp msg count",
+    "LINKEDIN-HEADLINE",
+    "LINKEDIN-REPLY",
+    "LINKEDIN-URL",
+    "Stand Size",
+    "Amount",
+    "CRM Update",
+    "CRM Lead ID"
+]
+
 
 # === Follow-up Templates ===
 FOLLOWUP_EMAILS = [
@@ -226,7 +255,10 @@ def batch_color_rows(spreadsheet_id, start_row_index_color_map, sheet_id):
 def process_replies():
     print("🔁 Processing replies...", flush=True)
     try:
-        data = sheet.get_all_records()
+        data = sheet.get_all_records(
+          expected_headers=EXPECTED_HEADERS,
+          default_blank=""
+        )
         replied_emails = get_reply_emails()
         if not replied_emails:
             print("⚠️ No new replies found. Skipping color check.", flush=True)
@@ -269,7 +301,10 @@ def process_replies():
 def process_followups():
     print("🔁 Processing follow-up emails...", flush=True)
     try:
-        data = sheet.get_all_records()
+        data = sheet.get_all_records(
+          expected_headers=EXPECTED_HEADERS,
+          default_blank=""
+        )
         today = datetime.today().strftime('%Y-%m-%d')
         updates = []
         color_updates = {}
