@@ -62,6 +62,21 @@ sheets_api = build("sheets", "v4", credentials=creds)
 gc = gspread.authorize(creds)
 sheet = gc.open("Expo-Sales-Management").worksheet("exhibitors-1")
 print("✅ Google Sheets authenticated and worksheet loaded.", flush=True)
+def get_header_map(sheet):
+    headers = sheet.row_values(1)
+    return {h.strip(): chr(65 + i) for i, h in enumerate(headers) if h.strip()}
+
+HEADER_MAP = get_header_map(sheet)
+REQUIRED_HEADERS = [
+    "Email", "First_Name", "Follow-Up Count",
+    "Last Follow-Up Date", "Reply Status"
+]
+
+for h in REQUIRED_HEADERS:
+    if h not in HEADER_MAP:
+        raise Exception(f"Missing required column: {h}")
+def cell(header, row):
+    return f"{sheet.title}!{HEADER_MAP[header]}{row}"
 
 # === Follow-up Templates ===
 FOLLOWUP_EMAILS = [
@@ -226,7 +241,15 @@ def batch_color_rows(spreadsheet_id, start_row_index_color_map, sheet_id):
 def process_replies():
     print("🔁 Processing replies...", flush=True)
     try:
-        data = sheet.get_all_records()
+        data = sheet.get_all_records(expected_headers=[
+        "Lead Date","Lead Source","First_Name","Last Name","Company Name",
+        "Mobile","Email","Show","Next Followup","Email-Count","Call Attempt",
+        "Linkedin Msg","Comments","Pitch Deck URL","Interested for",
+        "Follow-Up Count","Last Follow-Up Date","Reply Status",
+        "WhatsApp msg count","LINKEDIN-HEADLINE","LINKEDIN-REPLY",
+        "LINKEDIN-URL","Stand Size","Amount","CRM Update","CRM Lead ID"
+      ])
+
         replied_emails = get_reply_emails()
         if not replied_emails:
             print("⚠️ No new replies found. Skipping color check.", flush=True)
@@ -234,8 +257,6 @@ def process_replies():
 
         updates = []
         color_updates = {}
-        # Fetch row colors ONLY if replies found
-        row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
 
         for idx, row in enumerate(data, start=2):
             if not any(row.values()):
@@ -243,17 +264,13 @@ def process_replies():
                 continue
 
             email_addr = row.get("Email", "").lower().strip()
-            if not email_addr or row.get("Reply Status", "") == "Replied":
+            reply_status = row.get("Reply Status", "").strip()
+            if not email_addr or reply_status == "Replied":
                 print(f"⚠️ Row {idx}: Email missing or already Replied, skipping...", flush=True)
                 continue
-
-            rgb = row_colors[idx - 2]
-            if rgb and rgb != (255, 255, 255):
-                print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
-                continue
-
+              
             if email_addr in replied_emails:
-                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["Replied"]]})
+                updates.append({"range": cell("Reply Status", idx), "values": [["Replied"]]})
                 color_updates[idx] = "#FFFF00"
                 print(f"✅ Row {idx}: Email {email_addr} marked as Replied.", flush=True)
 
@@ -269,11 +286,17 @@ def process_replies():
 def process_followups():
     print("🔁 Processing follow-up emails...", flush=True)
     try:
-        data = sheet.get_all_records()
+        data = sheet.get_all_records(expected_headers=[
+        "Lead Date","Lead Source","First_Name","Last Name","Company Name",
+        "Mobile","Email","Show","Next Followup","Email-Count","Call Attempt",
+        "Linkedin Msg","Comments","Pitch Deck URL","Interested for",
+        "Follow-Up Count","Last Follow-Up Date","Reply Status",
+        "WhatsApp msg count","LINKEDIN-HEADLINE","LINKEDIN-REPLY",
+        "LINKEDIN-URL","Stand Size","Amount","CRM Update","CRM Lead ID"
+      ])
         today = datetime.today().strftime('%Y-%m-%d')
         updates = []
         color_updates = {}
-        row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
         sent_tracker = set()
 
         for idx, row in enumerate(data, start=2):
@@ -281,17 +304,14 @@ def process_followups():
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
 
-            rgb = row_colors[idx - 2]
-            if rgb and rgb != (255, 255, 255):
-                print(f"⚠️ Row {idx}: Already colored (RGB {rgb}), skipping...", flush=True)
-                continue
-
             email_addr = row.get("Email", "").lower().strip()
             if not email_addr or email_addr in sent_tracker:
                 print(f"⚠️ Row {idx}: Email missing or already sent in this cycle, skipping...", flush=True)
                 continue
 
-            name = row.get("First_Name", "").strip()
+            name = row.get("First_Name", "").strip().title()
+            if not name:
+              name = "there"
             try:
                 count = int(row.get("Follow-Up Count"))
                 if count < 0:
@@ -313,7 +333,7 @@ def process_followups():
 
             if count >= 4:
                 send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
-                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["No Reply After 4 Followups"]]})
+                updates.append({"range": cell("Reply Status", idx),"values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
                 sent_tracker.add(email_addr)
                 print(f"❌ Row {idx}: Max follow-ups reached, final email sent.", flush=True)
@@ -343,9 +363,9 @@ def process_followups():
                 print(f"✅ Row {idx}: Sent followup {next_count+1} to {email_addr}", flush=True)
 
                 updates.extend([
-                    {"range": f"{sheet.title}!P{idx}", "values": [[str(next_count + 1)]]},
-                    {"range": f"{sheet.title}!Q{idx}", "values": [[today]]},
-                    {"range": f"{sheet.title}!R{idx}", "values": [["Pending"]]}
+                    {"range": cell("Follow-Up Count", idx), "values": [[str(next_count + 1)]]},
+                    {"range": cell("Last Follow-Up Date", idx), "values": [[today]]},
+                    {"range": cell("Reply Status", idx), "values": [["Pending"]]}
                 ])
 
             except Exception as e:
