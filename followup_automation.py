@@ -75,13 +75,13 @@ EXPECTED_HEADERS = [
     "Email-Count",
     "Call Attempt",
     "Linkedin Msg",
+    "WhatsApp msg count",
     "Comments",
     "Pitch Deck URL",
     "Interested for",
     "Follow-Up Count",
     "Last Follow-Up Date",
     "Reply Status",
-    "WhatsApp msg count",
     "LINKEDIN-HEADLINE",
     "LINKEDIN-REPLY",
     "LINKEDIN-URL",
@@ -285,7 +285,7 @@ def process_replies():
                 continue
 
             if email_addr in replied_emails:
-                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["Replied"]]})
+                updates.append({"range": f"{sheet.title}!S{idx}", "values": [["Replied"]]})
                 color_updates[idx] = "#FFFF00"
                 print(f"✅ Row {idx}: Email {email_addr} marked as Replied.", flush=True)
 
@@ -348,7 +348,7 @@ def process_followups():
 
             if count >= 4:
                 send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
-                updates.append({"range": f"{sheet.title}!R{idx}", "values": [["No Reply After 4 Followups"]]})
+                updates.append({"range": f"{sheet.title}!S{idx}", "values": [["No Reply After 4 Followups"]]})
                 color_updates[idx] = "#FF0000"
                 sent_tracker.add(email_addr)
                 print(f"❌ Row {idx}: Max follow-ups reached, final email sent.", flush=True)
@@ -378,9 +378,9 @@ def process_followups():
                 print(f"✅ Row {idx}: Sent followup {next_count+1} to {email_addr}", flush=True)
 
                 updates.extend([
-                    {"range": f"{sheet.title}!P{idx}", "values": [[str(next_count + 1)]]},
-                    {"range": f"{sheet.title}!Q{idx}", "values": [[today]]},
-                    {"range": f"{sheet.title}!R{idx}", "values": [["Pending"]]}
+                    {"range": f"{sheet.title}!Q{idx}", "values": [[str(next_count + 1)]]},
+                    {"range": f"{sheet.title}!R{idx}", "values": [[today]]},
+                    {"range": f"{sheet.title}!S{idx}", "values": [["Pending"]]}
                 ])
 
             except Exception as e:
