@@ -88,7 +88,8 @@ EXPECTED_HEADERS = [
     "Stand Size",
     "Amount",
     "CRM Update",
-    "CRM Lead ID"
+    "CRM Lead ID",
+    "Workflow-Identifier"
 ]
 
 
@@ -270,6 +271,12 @@ def process_replies():
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
 
         for idx, row in enumerate(data, start=2):
+          # ⛔ BLOCK POST EXPO WORKFLOW
+          workflow = row.get("Workflow-Identifier", "").strip().upper()
+          if workflow == "POST EXPO":
+            print(f"⛔ Row {idx}: POST EXPO workflow — email blocked.", flush=True)
+            continue
+
             if not any(row.values()):
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
