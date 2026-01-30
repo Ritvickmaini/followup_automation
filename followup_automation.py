@@ -271,12 +271,7 @@ def process_replies():
         row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
 
         for idx, row in enumerate(data, start=2):
-          # ⛔ BLOCK POST EXPO WORKFLOW
-          workflow = row.get("Workflow-Identifier", "").strip().upper()
-          if workflow == "POST EXPO":
-            print(f"⛔ Row {idx}: POST EXPO workflow — email blocked.", flush=True)
-            continue
-
+          
             if not any(row.values()):
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
@@ -309,16 +304,27 @@ def process_followups():
     print("🔁 Processing follow-up emails...", flush=True)
     try:
         data = sheet.get_all_records(
-          expected_headers=EXPECTED_HEADERS,
-          default_blank=""
+            expected_headers=EXPECTED_HEADERS,
+            default_blank=""
         )
         today = datetime.today().strftime('%Y-%m-%d')
         updates = []
         color_updates = {}
-        row_colors = get_all_row_colors(sheet.spreadsheet.id, sheet.title, 2, len(data) + 1)
+        row_colors = get_all_row_colors(
+            sheet.spreadsheet.id,
+            sheet.title,
+            2,
+            len(data) + 1
+        )
         sent_tracker = set()
 
         for idx, row in enumerate(data, start=2):
+
+            # ⛔ BLOCK POST EXPO (FIRST AND ALWAYS)
+            workflow = str(row.get("Workflow-Identifier", "")).strip().upper()
+            if workflow == "POST EXPO":
+                continue
+
             if not any(row.values()):
                 print(f"⚠️ Row {idx} is empty, skipping...", flush=True)
                 continue
@@ -334,6 +340,7 @@ def process_followups():
                 continue
 
             name = row.get("First_Name", "").strip()
+
             try:
                 count = int(row.get("Follow-Up Count"))
                 if count < 0:
@@ -343,6 +350,7 @@ def process_followups():
 
             last_date = row.get("Last Follow-Up Date", "")
             reply_status = row.get("Reply Status", "").strip()
+
             if reply_status in ["Replied", "No Reply After 4 Followups"]:
                 print(f"⚠️ Row {idx}: Already replied or finished followups, skipping...", flush=True)
                 continue
@@ -354,45 +362,51 @@ def process_followups():
                     continue
 
             if count >= 4:
-                send_email(email_addr, "Should I Close Your File?", FINAL_EMAIL, name=name)
-                updates.append({"range": f"{sheet.title}!S{idx}", "values": [["No Reply After 4 Followups"]]})
+                send_email(
+                    email_addr,
+                    "Should I Close Your File?",
+                    FINAL_EMAIL,
+                    name=name
+                )
+                updates.append({
+                    "range": f"{sheet.title}!S{idx}",
+                    "values": [["No Reply After 4 Followups"]]
+                })
                 color_updates[idx] = "#FF0000"
                 sent_tracker.add(email_addr)
                 print(f"❌ Row {idx}: Max follow-ups reached, final email sent.", flush=True)
                 continue
 
-            next_count = count
             try:
-                followup_text = FOLLOWUP_EMAILS[next_count].replace("{%name%}", name)
-                subject = FOLLOWUP_SUBJECTS[next_count]
+                followup_text = FOLLOWUP_EMAILS[count].replace("{%name%}", name)
+                subject = FOLLOWUP_SUBJECTS[count]
 
-                if next_count == 0:
+                if count == 0:
                     show = row.get("Show", "").strip()
                     if not show:
-                        print(f"⚠️ Row {idx}: Show missing for first followup, skipping...", flush=True)
                         continue
                     followup_text = followup_text.replace("{%show%}", show)
                     subject = subject.replace("{%show%}", show)
-                elif next_count == 1:
+
+                elif count == 1:
                     url = row.get("Pitch Deck URL", "").strip()
                     if not url:
-                        print(f"⚠️ Row {idx}: Pitch Deck URL missing, skipping second followup...", flush=True)
                         continue
                     followup_text = followup_text.replace("{%pitch_deck_url%}", url)
 
                 send_email(email_addr, subject, followup_text, name=name)
                 sent_tracker.add(email_addr)
-                print(f"✅ Row {idx}: Sent followup {next_count+1} to {email_addr}", flush=True)
 
                 updates.extend([
-                    {"range": f"{sheet.title}!Q{idx}", "values": [[str(next_count + 1)]]},
+                    {"range": f"{sheet.title}!Q{idx}", "values": [[str(count + 1)]]},
                     {"range": f"{sheet.title}!R{idx}", "values": [[today]]},
                     {"range": f"{sheet.title}!S{idx}", "values": [["Pending"]]}
                 ])
 
+                print(f"✅ Row {idx}: Sent followup {count + 1}", flush=True)
+
             except Exception as e:
                 print(f"❌ Failed to prepare/send follow-up email to {email_addr}: {e}", flush=True)
-                continue
 
             if (idx - 1) % 3 == 0:
                 print("⏱ Sleeping 3 seconds between emails...", flush=True)
@@ -401,7 +415,11 @@ def process_followups():
         if updates:
             batch_update_cells(sheet.spreadsheet.id, updates)
         if color_updates:
-            batch_color_rows(sheet.spreadsheet.id, color_updates, sheet._properties['sheetId'])
+            batch_color_rows(
+                sheet.spreadsheet.id,
+                color_updates,
+                sheet._properties["sheetId"]
+            )
 
     except Exception as e:
         print(f"❌ Error in processing followups: {e}", flush=True)
